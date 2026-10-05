@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recall: Spaced Repetition</title>
+<style>
+:root{
+  --bg:#faf8f4;--surface:#ffffff;--text:#1f1d1a;--muted:#5c564d;--primary:#0b5cad;--on-primary:#ffffff;--border:#cfc8ba;--hard:#a33f00;--danger:#b3261e;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#14130f;--surface:#1d1c17;--text:#f1ede4;--muted:#b5afa1;--primary:#93c2ff;--on-primary:#10151c;--border:#3b3830;--hard:#ffb07a;--danger:#ffb4ab}
+}
+:root[data-theme="dark"]{--bg:#14130f;--surface:#1d1c17;--text:#f1ede4;--muted:#b5afa1;--primary:#93c2ff;--on-primary:#10151c;--border:#3b3830;--hard:#ffb07a;--danger:#ffb4ab}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.5}
+.app{min-height:100%;display:flex;flex-direction:column;max-width:1040px;margin:0 auto;padding:16px 24px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+h1{font-family:var(--serif);font-size:24px;font-weight:600;margin:0}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn{font:inherit;font-size:16px;font-weight:600;min-height:48px;padding:0 24px;border:2px solid var(--primary);border-radius:8px;background:var(--surface);color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-align:center}
+button.pri{background:var(--primary);color:var(--on-primary)}
+button.quiet{border-color:var(--border);color:var(--muted);font-weight:400;padding:0 16px;min-height:48px}
+button:hover:not(:disabled){border-color:var(--text)}
+button:disabled{border-color:var(--border);color:var(--muted);cursor:not-allowed;opacity:.6}
+button:focus-visible,input:focus-visible,summary:focus-visible,select:focus-visible{outline:3px solid var(--text);outline-offset:3px}
+main{flex:1;padding:24px 0}
+.msg{font-size:14px;color:var(--muted);min-height:24px;margin:0 0 16px}
+.deck{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:16px;margin-bottom:8px}
+.deck .name{flex:1 1 200px;font-family:var(--serif);font-size:24px;overflow-wrap:anywhere}
+.counts{display:flex;gap:24px;font-size:14px;color:var(--muted)}
+.counts b{display:block;font-size:24px;font-weight:600;line-height:1.2;font-family:var(--serif)}
+.c-new b{color:var(--primary)}.c-learn b{color:var(--hard)}.c-due b{color:var(--text)}
+.empty{text-align:center;padding:48px 16px;color:var(--muted)}
+.empty h2{font-family:var(--serif);color:var(--text);font-size:24px;font-weight:600}
+details{margin-top:24px;font-size:14px;color:var(--muted)}
+summary{cursor:pointer;min-height:48px;display:flex;align-items:center}
+.opts{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.opts label{display:inline-flex;align-items:center;gap:8px}
+input[type=number]{font:inherit;width:96px;min-height:48px;padding:0 16px;border:2px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
+select{font:inherit;min-height:48px;padding:0 12px;border:2px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);max-width:280px}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--primary)}
+.study{display:flex;flex-direction:column;min-height:calc(100vh - 160px)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 0}
+.front,.back{font-family:var(--serif);line-height:1.25;margin:0;max-width:100%;overflow-wrap:anywhere;text-wrap:balance}
+.xl{font-size:clamp(48px,11vw,96px)}.l{font-size:clamp(36px,7vw,72px)}.m{font-size:clamp(28px,4.6vw,48px)}.s{font-size:clamp(24px,3.6vw,32px)}
+.back{margin-top:32px;padding-top:32px;border-top:1px solid var(--border);width:100%;max-width:720px}
+.extra{font-family:var(--sans);font-size:16px;line-height:1.6;color:var(--muted);margin-top:24px}
+.extra b{color:var(--text)}
+.ctl{display:flex;flex-direction:column;gap:16px;align-items:center}
+.show{width:100%;max-width:480px;min-height:56px}
+.grades{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:640px}
+.grades button{flex-direction:column;min-height:64px;padding:8px;line-height:1.3}
+.grades small{font-size:14px;font-weight:400;color:var(--muted)}
+.g1{border-color:var(--danger);color:var(--danger)}
+.hint{font-size:14px;color:var(--muted);margin:0;text-align:center}
+kbd{font-family:var(--sans);border:1px solid var(--border);border-radius:4px;padding:0 6px;background:var(--surface)}
+.drop{outline:3px dashed var(--primary);outline-offset:-12px}
+@media (max-width:480px){.app{padding:16px}.grades{grid-template-columns:repeat(2,1fr)}.counts{gap:16px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Recall</h1>
+    <div class="tools" id="tools"></div>
+  </header>
+  <main id="main"></main>
+</div>
+<input type="file" id="file" accept=".txt,.csv,.tsv,.json,text/plain" multiple hidden>
+<script>
+(function(){
+var KEY="recall:v1",STEPS=[1,10],RELEARN=[10],AHEAD=20*60000;
+var DB={cards:[],newPerDay:20,flip:{},daily:{date:"",n:{}}};
+try{var raw=localStorage.getItem(KEY);if(raw)DB=Object.assign(DB,JSON.parse(raw));}catch(e){}
+DB.tts=Object.assign({
+  voiceURI:"",lang:"es-CO",rate:0.9,auto:false,
+  pauseCommaMs:250,pausePeriodMs:500
+},DB.tts||{});
+if("speechSynthesis" in window){try{speechSynthesis.getVoices();}catch(e){}}
+var $=function(s){return document.querySelector(s);};
+var S=null,msg="";
+function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){msg="Could not save: browser storage is unavailable.";}}
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function today(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function daily(){if(DB.daily.date!==today())DB.daily={date:today(),n:{}};return DB.daily.n;}
+function midnight(add){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate()+add).getTime();}
+
+/* ---------- Text-to-speech ---------- */
+var ttsToken=0;
+function ttsOk(){return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;}
+function normLang(s){return String(s||"").replace("_","-");}
+function stripHtml(h){
+  var d=document.createElement("div");
+  d.innerHTML=h;
+  return (d.textContent||"").replace(/\s+/g," ").trim();
+}
+function allVoices(){
+  var vs=[];try{vs=speechSynthesis.getVoices()||[];}catch(e){}
+  return vs;
+}
+function pickVoice(){
+  var vs=allVoices();
+  if(DB.tts.voiceURI){
+    var byUri=vs.filter(function(v){return v.voiceURI===DB.tts.voiceURI;})[0];
+    if(byUri)return byUri;
+  }
+  var want=normLang(DB.tts.lang),base=want.slice(0,2);
+  var exact=vs.filter(function(v){return normLang(v.lang).toLowerCase()===want.toLowerCase();})[0];
+  if(exact)return exact;
+  return vs.filter(function(v){return normLang(v.lang).slice(0,2).toLowerCase()===base.toLowerCase();})[0]||null;
+}
+function stopSpeech(){
+  if(!ttsOk())return;
+  ttsToken++;
+  try{speechSynthesis.cancel();}catch(e){}
+}
+// Split text into fragments that end at punctuation, then coalesce adjacent
+// fragments whose pause is zero so the engine can intone a whole clause.
+function chunkText(text){
+  var re=/[^.!?,;:]+[.!?,;:]*/g,m,segs=[];
+  while((m=re.exec(text))!==null)segs.push(m[0]);
+  if(!segs.length)segs.push(text);
+  // Merge decimal-number splits like "3." + "14" → "3.14".
+  var merged=[];
+  for(var i=0;i<segs.length;i++){
+    if(merged.length&&/\.$/.test(merged[merged.length-1])&&/^\s*\d/.test(segs[i])){
+      merged[merged.length-1]+=segs[i];
+    }else merged.push(segs[i]);
+  }
+  var commaMs=Math.max(0,DB.tts.pauseCommaMs|0);
+  var periodMs=Math.max(0,DB.tts.pausePeriodMs|0);
+  var chunks=[];
+  for(var j=0;j<merged.length;j++){
+    var t=merged[j].trim();
+    if(!t)continue;
+    var last=t.charAt(t.length-1),pause=0;
+    if(".!?".indexOf(last)>=0)pause=periodMs;
+    else if(",;:".indexOf(last)>=0)pause=commaMs;
+    var prev=chunks[chunks.length-1];
+    if(prev&&prev.pause===0){prev.text+=" "+t;prev.pause=pause;}
+    else chunks.push({text:t,pause:pause});
+  }
+  return chunks;
+}
+function speak(text,voice){
+  if(!ttsOk()||!text)return;
+  stopSpeech();
+  var myToken=ttsToken;
+  var chunks=chunkText(text);
+  if(!chunks.length)return;
+  var i=0;
+  function next(){
+    if(myToken!==ttsToken)return;
+    if(i>=chunks.length)return;
+    var c=chunks[i++];
+    var u=new SpeechSynthesisUtterance(c.text);
+    var v=voice||pickVoice();
+    if(v){u.voice=v;u.lang=v.lang;}else{u.lang=DB.tts.lang;}
+    u.rate=DB.tts.rate;
+    u.onend=function(){
+      if(myToken!==ttsToken)return;
+      if(c.pause>0)setTimeout(next,c.pause);else next();
+    };
+    u.onerror=function(){
+      if(myToken!==ttsToken)return;
+      setTimeout(next,10);
+    };
+    try{speechSynthesis.speak(u);}catch(e){}
+  }
+  next();
+}
+function speakCurrent(side){
+  var c=S&&S.cur;if(!c)return;
+  var fl=!!DB.flip[S.deck],html;
+  if(side==="front")html=fl?c.back:c.front;
+  else if(side==="back")html=fl?c.front:c.back;
+  else html=S.show?(fl?c.front:c.back):(fl?c.back:c.front);
+  speak(stripHtml(html));
+}
+function sortVoices(vs){
+  return vs.slice().sort(function(a,b){
+    var aEs=normLang(a.lang).slice(0,2).toLowerCase()==="es"?0:1;
+    var bEs=normLang(b.lang).slice(0,2).toLowerCase()==="es"?0:1;
+    if(aEs!==bEs)return aEs-bEs;
+    if(a.lang!==b.lang)return a.lang.localeCompare(b.lang);
+    return (a.name||"").localeCompare(b.name||"");
+  });
+}
+function populateVoiceSelect(sel){
+  var vs=sortVoices(allVoices());
+  sel.innerHTML="";
+  if(!vs.length){
+    sel.appendChild(new Option("Default (voices still loading…)",""));
+    sel.disabled=true;
+    return;
+  }
+  sel.disabled=false;
+  var found=false;
+  vs.forEach(function(v){
+    var o=new Option(v.name+" — "+normLang(v.lang),v.voiceURI);
+    if(DB.tts.voiceURI&&v.voiceURI===DB.tts.voiceURI)o.selected=true,found=true;
+    sel.appendChild(o);
+  });
+  if(!found){
+    var preferred=vs.filter(function(v){return normLang(v.lang).toLowerCase()==="es-co";})[0]
+                 || vs.filter(function(v){return normLang(v.lang).slice(0,2).toLowerCase()==="es";})[0]
+                 || vs[0];
+    if(preferred){
+      sel.value=preferred.voiceURI;
+      DB.tts.voiceURI=preferred.voiceURI;
+      DB.tts.lang=normLang(preferred.lang);
+      save();
+    }
+  }
+}
+
+/* ---------- Scheduler (SM-2 style, close to Anki's classic defaults) ---------- */
+function sched(c,g,now){
+  var n=Object.assign({},c);n.reps=(c.reps||0)+1;
+  if(c.s==="n"||c.s==="l"){
+    var steps=c.rl?RELEARN:STEPS,st=c.s==="n"?0:c.st;
+    var grad=g===4||(g===3&&st+1>=steps.length);
+    if(grad){n.s="r";n.ease=c.ease||2.5;n.ivl=c.rl?Math.max(1,c.ivl||1)+(g===4?1:0):(g===4?4:1);n.rl=0;n.due=midnight(n.ivl);return n;}
+    n.s="l";n.st=g===1?0:g===2?st:st+1;n.due=now+steps[n.st]*60000;return n;
+  }
+  var iv=c.ivl,e=c.ease;
+  if(g===1){n.lapses=(c.lapses||0)+1;n.ease=Math.max(1.3,e-.2);n.s="l";n.rl=1;n.st=0;n.ivl=Math.max(1,Math.round(iv*.5));n.due=now+RELEARN[0]*60000;return n;}
+  if(g===2){n.ivl=Math.max(iv+1,Math.round(iv*1.2));n.ease=Math.max(1.3,e-.15);}
+  if(g===3){n.ivl=Math.max(iv+1,Math.round(iv*e));}
+  if(g===4){n.ivl=Math.max(iv+1,Math.round(iv*e*1.3));n.ease=e+.15;}
+  n.due=midnight(n.ivl);return n;
+}
+function fmt(c,now){
+  if(c.s==="r"){var d=c.ivl;return d<30?d+"d":d<365?(d/30).toFixed(1).replace(".0","")+"mo":(d/365).toFixed(1).replace(".0","")+"y";}
+  var m=Math.max(1,Math.round((c.due-now)/60000));return m<60?m+"m":Math.round(m/60)+"h";
+}
+function inDeck(d){return DB.cards.filter(function(c){return c.deck===d;});}
+function counts(d){
+  var all=inDeck(d),end=midnight(1),used=daily()[d]||0;
+  var nw=all.filter(function(c){return c.s==="n";}).length;
+  return{nw:Math.max(0,Math.min(nw,DB.newPerDay-used)),learn:all.filter(function(c){return c.s==="l";}).length,due:all.filter(function(c){return c.s==="r"&&c.due<end;}).length};
+}
+function pick(d){
+  var all=inDeck(d),now=Date.now(),end=midnight(1),k;
+  var L=all.filter(function(c){return c.s==="l";}).sort(function(a,b){return a.due-b.due;});
+  if(L.length&&L[0].due<=now)return L[0];
+  var R=all.filter(function(c){return c.s==="r"&&c.due<end;});
+  if(R.length)return R[Math.floor(Math.random()*R.length)];
+  if(counts(d).nw>0)return all.filter(function(c){return c.s==="n";})[0];
+  if(L.length&&L[0].due<=now+AHEAD)return L[0];
+  return null;
+}
+
+/* ---------- Import ---------- */
+var OK=["b","i","u","em","strong","br","div","span","p","ul","ol","li","sub","sup"];
+function clean(h){
+  var doc=new DOMParser().parseFromString(h,"text/html");
+  function walk(n){var o="";n.childNodes.forEach(function(c){
+    if(c.nodeType===3)o+=esc(c.nodeValue);
+    else if(c.nodeType===1){var t=c.tagName.toLowerCase();if(t==="br")o+="<br>";else if(OK.indexOf(t)>=0)o+="<"+t+">"+walk(c)+"</"+t+">";else if(t!=="script"&&t!=="style")o+=walk(c);}
+  });return o;}
+  return walk(doc.body).trim();
+}
+function dsv(s,sep){
+  var rows=[],row=[],f="",q=false;
+  for(var i=0;i<s.length;i++){var ch=s[i];
+    if(q){if(ch==='"'){if(s[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;}
+    else if(ch==='"'&&f==="")q=true;
+    else if(ch===sep){row.push(f);f="";}
+    else if(ch==="\n"){row.push(f);rows.push(row);row=[];f="";}
+    else f+=ch;
+  }
+  if(f!==""||row.length){row.push(f);rows.push(row);}
+  return rows.filter(function(r){return !(r.length===1&&r[0].trim()==="");});
+}
+var SEP={tab:"\t",comma:",",semicolon:";",space:" ",pipe:"|",colon:":"};
+function importText(txt,fname){
+  var lines=txt.replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n"),k=0,m={sep:null,deck:null,dc:null,html:true};
+  for(;k<lines.length&&lines[k].charAt(0)==="#";k++){
+    var h=lines[k].match(/^#([^:]+):(.*)$/);if(!h)continue;
+    var key=h[1].trim().toLowerCase(),v=h[2].trim();
+    if(key==="separator")m.sep=SEP[v.toLowerCase()]||v;
+    else if(key==="html")m.html=v.toLowerCase()==="true";
+    else if(key==="deck")m.deck=v;
+    else if(key==="deck column")m.dc=parseInt(v,10)-1;
+  }
+  var body=lines.slice(k).join("\n"),sep=m.sep||(body.indexOf("\t")>=0?"\t":",");
+  var base=fname.replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").trim()||"Imported";
+  var seen={},added=0,dup=0;
+  DB.cards.forEach(function(c){seen[c.deck+"\u0001"+c.front+"\u0001"+c.back]=1;});
+  dsv(body,sep).forEach(function(r){
+    if(r.length<2||!r[0].trim())return;
+    var f=m.html?r[0]:esc(r[0]).replace(/\n/g,"<br>"),b=m.html?r[1]:esc(r[1]).replace(/\n/g,"<br>");
+    f=clean(f);b=clean(b);
+    var d=(m.dc!=null&&r[m.dc]&&r[m.dc].trim())||m.deck||base,id=d+"\u0001"+f+"\u0001"+b;
+    if(seen[id]){dup++;return;}seen[id]=1;
+    DB.cards.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),deck:d,front:f,back:b,s:"n",ease:2.5,ivl:0,due:0,reps:0,lapses:0});added++;
+  });
+  return added+" cards added from "+fname+(dup?" ("+dup+" duplicates skipped)":"")+".";
+}
+function readFiles(files){
+  var done=0,out=[],list=Array.prototype.slice.call(files);
+  if(!list.length)return;
+  list.forEach(function(f){
+    f.text().then(function(t){
+      if(/\.json$/i.test(f.name)){
+        try{var j=JSON.parse(t);if(!Array.isArray(j.cards))throw 0;
+          if(confirm("Replace all current decks and progress with this backup?")){DB=Object.assign({cards:[],newPerDay:20,flip:{},daily:{date:"",n:{}}},j);DB.tts=Object.assign({voiceURI:"",lang:"es-CO",rate:0.9,auto:false,pauseCommaMs:250,pausePeriodMs:500},DB.tts||{});out.push("Backup restored.");}
+        }catch(e){out.push(f.name+" is not a valid Recall backup.");}
+      }else out.push(importText(t,f.name));
+    }).catch(function(){out.push("Could not read "+f.name+".");}).then(function(){
+      if(++done===list.length){msg=out.join(" ");save();S=null;render();}
+    });
+  });
+}
+
+/* ---------- Views ---------- */
+function size(h){var n=h.replace(/<[^>]*>/g,"").length;return n<=16?"xl":n<=40?"l":n<=90?"m":"s";}
+function deckNames(){var s={};DB.cards.forEach(function(c){s[c.deck]=1;});return Object.keys(s).sort();}
+function render(){
+  var main=$("#main"),tools=$("#tools");
+  if(S){study(main,tools);return;}
+  tools.innerHTML='<button class="pri" data-a="import">Import file</button>';
+  var ds=deckNames(),h='<p class="msg" role="status">'+esc(msg)+'</p>';
+  if(!ds.length)h+='<div class="empty"><h2>No decks yet</h2><p>Import an Anki text export (.txt) to begin. You can also drop a file anywhere on this page.</p></div>';
+  ds.forEach(function(d,i){
+    var c=counts(d),idle=!c.nw&&!c.due&&!c.learn;
+    h+='<div class="deck"><div class="name">'+esc(d)+'</div><div class="counts"><div class="c-new"><b>'+c.nw+'</b>New</div><div class="c-learn"><b>'+c.learn+'</b>Learning</div><div class="c-due"><b>'+c.due+'</b>Due</div></div>'
+      +'<button class="pri" data-a="study" data-i="'+i+'"'+(idle?" disabled":"")+'>'+(idle?"Done for today":"Study")+'</button><button class="quiet" data-a="flip" data-i="'+i+'" aria-pressed="'+!!DB.flip[d]+'" title="When on, the back of each card is shown first">Flip sides: '+(DB.flip[d]?"On":"Off")+'</button><button class="quiet" data-a="del" data-i="'+i+'" aria-label="Delete deck '+esc(d)+'">Delete</button></div>';
+  });
+  h+='<details><summary>Options and backup</summary><div class="opts">'
+   +   '<label>New cards per day <input type="number" id="npd" min="0" max="999" value="'+DB.newPerDay+'"></label>'
+   +   '<label>Voice <select id="tts-voice"'+(ttsOk()?'':' disabled')+'></select></label>'
+   +   '<label>Rate <input type="number" id="tts-rate" min="0.5" max="1.5" step="0.05" value="'+DB.tts.rate+'"'+(ttsOk()?'':' disabled')+'></label>'
+   +   '<label>Pause at commas <input type="number" id="tts-pause-comma" min="0" max="2000" step="50" value="'+DB.tts.pauseCommaMs+'"'+(ttsOk()?'':' disabled')+'> ms</label>'
+   +   '<label>Pause at periods <input type="number" id="tts-pause-period" min="0" max="2000" step="50" value="'+DB.tts.pausePeriodMs+'"'+(ttsOk()?'':' disabled')+'> ms</label>'
+   +   '<label><input type="checkbox" id="tts-auto"'+(DB.tts.auto?' checked':'')+(ttsOk()?'':' disabled')+'> Auto-play</label>'
+   +   '<button class="quiet" data-a="tts-test"'+(ttsOk()?'':' disabled')+'>Try voice</button>'
+   +   '<button class="quiet" data-a="export">Download backup</button>'
+   +   '</div></details>';
+  main.innerHTML=h;
+  var sel=document.getElementById("tts-voice");
+  if(sel)populateVoiceSelect(sel);
+}
+function study(main,tools){
+  var c=S.cur;
+  tools.innerHTML='<button class="quiet" data-a="listen"'+(ttsOk()?"":" disabled")+'>Listen</button>'
+   +'<button class="quiet" data-a="flip" aria-pressed="'+!!DB.flip[S.deck]+'">Flip sides: '+(DB.flip[S.deck]?"On":"Off")+'</button>'
+   +'<button class="quiet" data-a="undo"'+(S.undo?"":" disabled")+'>Undo</button>'
+   +'<button class="quiet" data-a="home">&larr; Decks</button>';
+  if(!c){main.innerHTML='<div class="empty"><h2>All done for now</h2><p>You have finished <b>'+esc(S.deck)+'</b>. Come back later for more.</p><button class="pri" data-a="home">Back to decks</button></div>';return;}
+  var k=counts(S.deck),b=c.back,i=b.search(/<br>/),main1=i<0?b:b.slice(0,i),extra=i<0?"":b.slice(i).replace(/^(<br>)+/,"");
+  var fl=!!DB.flip[S.deck],pr=fl?main1:c.front,an=fl?c.front:main1;
+  var h='<div class="study"><p class="msg" style="margin:0;text-align:center">'+esc(S.deck)+' &nbsp;·&nbsp; New '+k.nw+' &nbsp;·&nbsp; Learning '+k.learn+' &nbsp;·&nbsp; Due '+k.due+'</p><div class="stage" aria-live="polite"><p class="front '+size(pr)+'">'+pr+'</p>';
+  if(S.show)h+='<div class="back"><p class="back-main '+size(an)+'" style="margin:0;font-family:var(--serif);line-height:1.25">'+an+'</p>'+(extra?'<div class="extra">'+extra+'</div>':"")+'</div>';
+  h+='</div><div class="ctl">';
+  if(!S.show)h+='<button class="pri show" data-a="show">Show answer</button><p class="hint"><kbd>Space</kbd> shows the answer. Then press <kbd>1</kbd> to <kbd>4</kbd>. Press <kbd>L</kbd> to listen.</p>';
+  else{var now=Date.now(),L=["Again","Hard","Good","Easy"];
+    h+='<div class="grades">';for(var g=1;g<=4;g++)h+='<button class="g'+g+(g===3?" pri":"")+'" data-a="g" data-g="'+g+'">'+L[g-1]+'<small'+(g===3?' style="color:inherit"':"")+'>'+fmt(sched(c,g,now),now)+'</small></button>';
+    h+='</div><p class="hint"><kbd>1</kbd> Again <kbd>2</kbd> Hard <kbd>3</kbd> Good <kbd>4</kbd> Easy &nbsp;·&nbsp; <kbd>L</kbd> Listen</p>';}
+  main.innerHTML=h+"</div></div>";
+}
+function nextCard(){
+  stopSpeech();
+  S.cur=pick(S.deck);
+  S.show=false;
+  render();
+  if(DB.tts.auto)speakCurrent("front");
+}
+function grade(g){
+  var c=S.cur,now=Date.now(),d=daily();
+  S.undo={prev:Object.assign({},c),cnt:d[S.deck]||0};
+  if(c.s==="n")d[S.deck]=(d[S.deck]||0)+1;
+  var n=sched(c,g,now),i=DB.cards.indexOf(c);DB.cards[i]=n;
+  save();nextCard();
+}
+function undo(){
+  if(!S||!S.undo)return;var u=S.undo,i=DB.cards.findIndex(function(c){return c.id===u.prev.id;});
+  DB.cards[i]=u.prev;daily()[S.deck]=u.cnt;S.cur=DB.cards[i];S.show=true;S.undo=null;save();render();
+}
+
+/* ---------- Events ---------- */
+document.addEventListener("click",function(e){
+  var t=e.target.closest("[data-a]");if(!t)return;
+  var a=t.dataset.a,ds=deckNames();
+  if(a==="import")$("#file").click();
+  else if(a==="study"){S={deck:ds[+t.dataset.i],cur:null,show:false,undo:null};msg="";nextCard();}
+  else if(a==="flip"){var fd=t.dataset.i!==undefined?ds[+t.dataset.i]:S.deck;DB.flip[fd]=!DB.flip[fd];save();render();}
+  else if(a==="del"){var n=ds[+t.dataset.i];delete DB.flip[n];if(confirm('Delete "'+n+'" and all its progress?')){DB.cards=DB.cards.filter(function(c){return c.deck!==n;});msg='Deleted "'+n+'".';save();render();}}
+  else if(a==="export"){var url=URL.createObjectURL(new Blob([JSON.stringify(DB)],{type:"application/json"})),l=document.createElement("a");l.href=url;l.download="recall-backup-"+today()+".json";l.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);}
+  else if(a==="home"){stopSpeech();S=null;render();}
+  else if(a==="show"){S.show=true;render();if(DB.tts.auto)speakCurrent("back");}
+  else if(a==="g")grade(+t.dataset.g);
+  else if(a==="undo")undo();
+  else if(a==="listen")speakCurrent();
+  else if(a==="tts-test"){
+    var sel=document.getElementById("tts-voice");
+    var v=sel?allVoices().filter(function(x){return x.voiceURI===sel.value;})[0]:null;
+    speak("Hola, ¿cómo estás? Bien, gracias.",v);
+  }
+});
+document.addEventListener("change",function(e){
+  if(e.target.id==="npd"){DB.newPerDay=Math.max(0,parseInt(e.target.value,10)||0);save();}
+  if(e.target.id==="file"){readFiles(e.target.files);e.target.value="";}
+  if(e.target.id==="tts-voice"){
+    DB.tts.voiceURI=e.target.value;
+    var v=allVoices().filter(function(x){return x.voiceURI===e.target.value;})[0];
+    if(v)DB.tts.lang=normLang(v.lang);
+    save();
+  }
+  if(e.target.id==="tts-auto"){DB.tts.auto=e.target.checked;save();}
+  if(e.target.id==="tts-rate"){DB.tts.rate=Math.max(0.5,Math.min(1.5,parseFloat(e.target.value)||0.9));save();}
+  if(e.target.id==="tts-pause-comma"){DB.tts.pauseCommaMs=Math.max(0,Math.min(2000,parseInt(e.target.value,10)||0));save();}
+  if(e.target.id==="tts-pause-period"){DB.tts.pausePeriodMs=Math.max(0,Math.min(2000,parseInt(e.target.value,10)||0));save();}
+});
+document.addEventListener("keydown",function(e){
+  if(!S||e.altKey||e.ctrlKey||e.metaKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  var k=e.key;
+  if(k==="Escape"){stopSpeech();S=null;render();return;}
+  if(k==="z"||k==="Z"){undo();return;}
+  if(k==="l"||k==="L"){speakCurrent();return;}
+  if(!S.cur)return;
+  if(!S.show&&(k===" "||k==="Enter")){e.preventDefault();S.show=true;render();if(DB.tts.auto)speakCurrent("back");}
+  else if(S.show&&"1234".indexOf(k)>=0&&k.length===1)grade(+k);
+  else if(S.show&&(k===" "||k==="Enter")){e.preventDefault();grade(3);}
+});
+["dragover","dragleave","drop"].forEach(function(t){window.addEventListener(t,function(e){
+  e.preventDefault();document.body.classList.toggle("drop",t==="dragover");
+  if(t==="drop"&&e.dataTransfer)readFiles(e.dataTransfer.files);
+});});
+if("speechSynthesis" in window){
+  speechSynthesis.onvoiceschanged=function(){
+    var sel=document.getElementById("tts-voice");
+    if(sel&&(sel.disabled||!sel.options.length||sel.options[0].value==="")){
+      populateVoiceSelect(sel);
+    }
+  };
+}
+render();
+})();
+</script>
+</body>
+</html>
